@@ -1,6 +1,6 @@
 # Tabbycat break generator
 
-Version 0.2
+Version 0.2.1
 
 This tool is used to create break slides starting from csv files as exported from Tabbycat.
 It has to outputs:
@@ -9,6 +9,7 @@ It has to outputs:
 2.  RevealJS slides, in html format, generated with [Quarto](https://quarto.org/).
 
 It is necessary to have at least one of these tools installed in order to the program to produce a final output.
+An example of the PDF output can be found in the test folder of the repository, and a RevealJS example is available [here](https://regisgourdel.github.io/break_slides).
 
 _Warning:_ the tool has only been tested on Linux and might not work without adaptation for other OS types.
 
