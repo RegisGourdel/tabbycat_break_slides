@@ -9,8 +9,26 @@ import tkinter.filedialog
 import sys
 from warnings import warn
 
+# Number of names by column in the judge break slides
+colmax = 5
+# Whether to include safety slides
+with_safety = True
 
-def tabbycat_import(fname: str):
+
+def tabbycat_import(fname: str) -> pd.DataFrame:
+    """
+    Import a csv file with break data that has the Tabbycat formatting.
+
+    Parameters
+    ----------
+    fname : str
+        The path to the file to use, containing information on a break.
+
+    Returns
+    -------
+    df : pd.DataFrame
+        The data frame with all useful break data.
+    """
     df = pd.read_csv(fname)
     df = df.loc[df['Rk'].notna() & (df['Rk'] != '---------')]
     # The following part might have to be changed to adapt for particular cases
@@ -21,22 +39,35 @@ def tabbycat_import(fname: str):
     return df
 
 
-colmax = 5 # Number of names by column
-with_safety = False
+def start_slides(tournament: str, dirct_back: str="") -> (str, str):
+    """
+    Creates the initial parts of both Latex and Quarto files.
 
+    Parameters
+    ----------
+    tournament : str
+        The name of the tournament.
+    dirct_back : str, optional
+        The variable for the path to the directory with a background picture if
+        any. If no value is provided a blank background is used. The default is
+        "".
 
-def start_slides(dirct, tournament, has_background: bool=False):
+    Returns
+    -------
+    (str, str)
+        The encoding for the first slides, in Quarto and Latex respectively.
+
+    """
     # Prepare the start of the latex file
     ltx_start = """
 \\documentclass[20pt, aspectratio=169]{beamer}
 
 \definecolor{myblue}{rgb}{0.2, 0.2, 0.8}
 
-\\usepackage[sfdefault]{FiraSans}
-\\usepackage[T1]{fontenc}
-\\renewcommand*\\oldstylenums[1]{{\\firaoldstyle #1}}
+\\usepackage{fontspec}
+\\setmainfont{DejaVu Sans}
 """
-    if has_background:
+    if dirct_back:
         ltx_start += """
 \\usepackage{graphicx}
 
@@ -46,7 +77,7 @@ def start_slides(dirct, tournament, has_background: bool=False):
 \\setbeamertemplate{background}
 {\\includegraphics[width=\\paperwidth, height=\\paperheight]{
 """
-        ltx_start += dirct + ("" if dirct[-1] == "/" else "/")
+        ltx_start += dirct_back + ("" if dirct_back[-1] == "/" else "/")
         ltx_start += "background.png}}\n"
     ltx_start += """
 \\beamertemplatenavigationsymbolsempty
@@ -69,7 +100,10 @@ def start_slides(dirct, tournament, has_background: bool=False):
 ---
 title: "Break announcement"
 subtitle: "{tournament}"
-background-image: background.png
+"""
+    if dirct_back:
+        qmd_start += "\nbackground-image: background.png\n"
+    qmd_start += f"""
 format:
     revealjs:
         footer: "{tournament} -- Break announcement"
@@ -79,7 +113,21 @@ format:
     return ltx_start, qmd_start
 
 
-def judge_break(judges_info):
+def judge_break(judges_info: pd.DataFrame) -> (str, str):
+    """
+    Generates the slides for the judge break.
+
+    Parameters
+    ----------
+    judges_info : pd.DataFrame
+        The data frame imported from a Tabbycat-generated csv, containing the
+        list of breaking judges.
+
+    Returns
+    -------
+    (str, str)
+        The encodings for the slides in Quarto and Latex format respectively.
+    """
     ncols = ceil(len(judges_info) / colmax)
     nslides = ceil(ncols / 2)
     # The lines below are used to determine the number of judge names displayed
@@ -134,13 +182,7 @@ def judge_break(judges_info):
     return qmdj, ltxj
 
 
-def team_comp(df, i):
-    x, y = df.iloc[i], df.iloc[i - 1]
-    return (x["Team points"] == y["Team points"]) and (
-            x["Speaker points"] == y["Speaker points"])
-
-
-def pos_str(i: int):
+def pos_str(i: int) -> str:
     """
     Auxiliary function that converts the position of a team to add ranking
     markers.
@@ -158,7 +200,7 @@ def pos_str(i: int):
     return ["1st", "2nd", "3rd"][i - 1] if i <= 3 else str(i) + "th"
 
 
-def break_slides(break_type: str, tab: pd.DataFrame):
+def break_slides(break_type: str, tab: pd.DataFrame) -> (str, str):
     """
     Function to create the slides for one break category.
 
@@ -211,6 +253,22 @@ def break_slides(break_type: str, tab: pd.DataFrame):
 
 
 def main(folder: str="", tournament: str=""):
+    """
+    The central function to generate the slides: starting from the folder where
+    the information is stored it will import all the data and call auxiliary
+    functions to generate slides based on it.
+
+    Parameters
+    ----------
+    folder : str, optional
+        The path to the folder containing break info files. The default is "".
+    tournament : str, optional
+        The name of the tournament. The default is "".
+
+    Returns
+    -------
+    None.
+    """
     if not folder:
         folder = tkinter.filedialog.askdirectory()
     else:
@@ -229,8 +287,8 @@ def main(folder: str="", tournament: str=""):
     if not tournament:
         tournament = folder.split("/")[-2]
     
-    ltx, qmd = start_slides(folder, tournament,
-                            os.path.isfile(folder + "background.png"))
+    ltx, qmd = start_slides(
+        tournament, folder if os.path.isfile(folder + "background.png") else "")
 
     if os.path.isfile(folder + "judges.csv"):
         judges_info = judges_info = pd.read_csv(
@@ -240,7 +298,7 @@ def main(folder: str="", tournament: str=""):
             ltx += ltxj
             qmd += qmdj
     # Find all files that contain break data
-    break_files = [fl for fl in os.listdir(folder) if '.csv' in fl and not
+    break_files = [fl for fl in os.listdir(folder) if fl[-4:] == '.csv' and not
                    'judges' in fl]
     # Loop over break  categories to create the slides
     for fl in break_files:
@@ -259,8 +317,8 @@ def main(folder: str="", tournament: str=""):
     # Operate a replacement so that spaces don't prevent code execution
     ex_fol = folder.replace(" ", "\ ")
     # Execute lualatex if available
-    if shutil.which('pdflatex'):
-        os.system(f"pdflatex -output-directory={ex_fol} {ex_fol}break_slides.tex")
+    if shutil.which('lualatex'):
+        os.system(f"lualatex -output-directory={ex_fol} {ex_fol}break_slides.tex")
     # Execute Quarto if available
     if shutil.which('quarto'):
         os.system(f"quarto render {ex_fol}break_slides.qmd --to revealjs")
